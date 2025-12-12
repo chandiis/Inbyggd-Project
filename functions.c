@@ -6,6 +6,7 @@
 #include "gpio.h"
 #include "tasks.h"
 #include <stdbool.h>
+#include <stdio.h>
 #include "leds.h"
 
 // data[] => an array with bytes that will be sent to the shift register
@@ -71,33 +72,33 @@ void toggleLED(uint8_t leds[], const defLED *led){
 	state = !state; //flip the state for the next call
 }
 
-/*bool PL1_Green_IsOn(void)
-{
-    // Check if the bit for PL1 green LED is set in leds[2]
-    if (leds[PL1_Green.shift_reg] & (1 << PL1_Green.bits))
-    {
-        return true;   // LED is ON
+bool isLED_On(uint8_t leds[], const defLED *led) {
+    // Check if the specific LED bit is set (i.e., ON)
+    if (leds[led->shift_reg] & (1 << led->bits)) {
+        return true; // LED is ON
+    } else {
+        return false; // LED is OFF
     }
-    else
-    {
-        return false;  // LED is OFF
-    }
-}*/
+}
 
 void initialization(){
 
 	uint8_t leds[3] = {0b0,0b0,0b0};
-	bool ped_request1 = false;
-	bool ped_request2 = false;
 
 	while(1){
 
-		// Knappar
-		if (PL2_Hit()) {
-			reset(leds, &PL1_Red);
+		if (isLED_On(leds, &TL1_Red)) {
+		  // TL1 Green LED is on
+			set(leds, &PL1_Green);
+		} else {
+		  // TL1 Red LED is off
+		    set(leds, &TL3_Red);
 		}
 
-
+		// Knappar
+		if (PL2_Hit()) {
+					reset(leds, &PL1_Green);
+		}
 		else{
 		    leds[0] = 0b00100100;
 		    leds[1] =  0b01001100;
