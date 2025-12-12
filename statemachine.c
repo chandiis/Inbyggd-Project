@@ -22,7 +22,8 @@
 
 #define toggleFreq 4 //Hz
 #define blink_duration 5000 //ms
-#define ped_green_duration 5000 //ms
+#define walkingDelay 5000 //ms, how long ped signal is green
+#define pedastrianDelay 5000 //ms, how long after the button is pressed that car signal turns red
 
 uint32_t togglePeriod = 1000 / toggleFreq;
 
@@ -42,6 +43,7 @@ void PedestrianCrossing1(void)
 	static uint32_t lastToggleTime1 = 0;  // time of last indicator toggle
 	static uint32_t startBlinkTime1 = 0;
 	static uint32_t startPedGreenTime1 = 0;
+	static uint32_t startCarRedTime1 = 0;
 	static bool indicatorOn1 = false;
 
 		State1 = NextState1;
@@ -55,6 +57,7 @@ void PedestrianCrossing1(void)
 					NextState1 = PedBlink;
 					startBlinkTime1 = HAL_GetTick();
 					lastToggleTime1 = HAL_GetTick(); // start blinking
+					startCarRedTime1 = HAL_GetTick();
 					indicatorOn1 = false;
 				}
 				else
@@ -89,14 +92,16 @@ void PedestrianCrossing1(void)
 					reset(leds1, &PL1_Blue);
 					reset(leds1, &PL1_Red);
 
-					//Car signal of active lane
-					set(leds1, &TL1_Red);
-					set(leds1, &TL3_Red);
-
-					if (HAL_GetTick() - startPedGreenTime1 >= ped_green_duration) {
+					if (HAL_GetTick() - startPedGreenTime1 >= walkingDelay) {
 						reset(leds1, &PL1_Green);
 						set(leds1, &PL1_Red);
 						NextState1 = Default;
+					}
+					if (HAL_GetTick() - startCarRedTime1 >= pedastrianDelay) {
+						//Car signal of active lane
+						set(leds1, &TL1_Red);
+						set(leds1, &TL3_Red);
+						NextState1 = PedGreen;
 					}
 					break;
 
@@ -164,7 +169,7 @@ void PedestrianCrossing2(void)
 				reset(leds2, &PL2_Blue);
 				reset(leds2, &PL2_Red);
 
-				if (HAL_GetTick() - startPedGreenTime2 >= ped_green_duration) {
+				if (HAL_GetTick() - startPedGreenTime2 >= walkingDelay) {
 					reset(leds2, &PL2_Green);
 					set(leds2, &PL2_Red);
 					NextState2 = Default;
