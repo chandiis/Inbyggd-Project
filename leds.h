@@ -9,6 +9,8 @@
 #define INC_LEDS_H_
 #include <stdint.h>
 
+extern uint8_t leds[3];
+
 typedef struct defLED{
 	uint8_t shift_reg;	//Shift register 1, 2 or 3
 	uint8_t bits;		//bits to shift with
