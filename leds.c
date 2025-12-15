@@ -14,6 +14,8 @@
 #include <stdbool.h>
 #include "leds.h"
 
+uint8_t leds[3] = {0,0,0};
+
 const defLED TL1_Red 	= {2, 0};   //Shift Register 1 and Shift with 0 bits
 const defLED TL1_Yellow = {2, 1}; 	//LED2
 const defLED TL1_Green 	= {2, 2};	//LED3
