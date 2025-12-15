@@ -15,16 +15,19 @@
 #include "functions.h"
 
 #define orangeDelay 2000 	//ms, how long traffic light stays orange
-#define greenDelay 5000 	//ms, how long traffic light stays green
-#define redDelayMax 6000 	//ms, how long to wait for car signal to turn green
+#define greenDelay 5000 	//ms, how long traffic light stays green, IF both lanes have no active cars
+#define redDelayMax 6000 	//ms, how long a car can maximum wait on red signal, IF both lanes have active cars
 
 extern uint8_t leds[3];
 
 typedef enum {
-    VerticalGreen,    // SW1 & SW3 GREEN, SW2 & SW4 RED. Vertical lane green, horizontal red
-    VerticalOrange,   // SW1 & SW3 ORANGE, SW2 & SW4 RED. Vertical lane orange, then red
-    HorizontalOrange, // SW1 & SW3 RED, SW2 & SW4 ORANGE. Horizontal lane orange, then red
-    HorizontalGreen   // SW1 & SW3 RED, SW2 & SW4 GREEN. Horizontal lane green, vertical red
+    VerticalGreen,    			// Vertical GREEN, Horizontal RED
+    VerticalOrangeToRed, 		// Vertical ORANGE -> RED, Horizontal RED -> ORANGE
+	HorizontalOrangeToGreen,	// Vertical ORANGE -> RED, Horizontal ORANGE -> GREEN
+
+    HorizontalGreen,   			// Horizontal GREEN, Vertical RED
+	HorizontalOrangeToRed,		// Horizontal ORANGE -> RED, Vertical RED -> ORANGE
+	VerticalOrangeToGreen		// Horizontal ORANGE -> RED, Vertical ORANGE -> GREEN
 } states;
 
 void RoadCrossing(void)
@@ -35,12 +38,12 @@ void RoadCrossing(void)
 
     /* Time stamps used for non-blocking timing control */
 	static uint32_t startCarGreenTime = 0;	// time when the traffic signal turns green
-	static uint32_t startCarRedTime = 0;	// time when the car signal turns red
 	static uint32_t startCarOrangeTime = 0;	// time when the car signal turns orange
 
+
 	/* Car States */
-    bool carVertical   = SW1_Hit() || SW3_Hit();
-    bool carHorizontal = SW2_Hit() || SW4_Hit();
+    bool carVertical   = SW1_Hit() || SW3_Hit();	//if any car is active in vertical lane
+    bool carHorizontal = SW2_Hit() || SW4_Hit();	//if any car is active in horizontal lane
 
 		State = NextState;
 
@@ -48,96 +51,123 @@ void RoadCrossing(void)
 			{
 				case VerticalGreen:
 				car1_SetGreen();	//SW1 & SW3 car signals shall be green
-				startCarGreenTime = HAL_GetTick();
 				car2_SetRed();		//SW2 & SW4 car signals shall be red
-				startCarRedTime = HAL_GetTick();
 				//ped1_SetRed();	//all pedestrian signals shall be red
 				//ped2_SetRed();
 
 				if(!carHorizontal && !carVertical && (HAL_GetTick() - startCarGreenTime >= greenDelay)) { //R2.4
+
+					/* Initialize timing variables for car transition */
+					startCarOrangeTime = HAL_GetTick();
+
 					/* If there are no active cars in any direction and greenDelay deadline has passed */
-					NextState = VerticalOrange;
+					NextState = VerticalOrangeToRed;
+
+				} else if(carHorizontal && carVertical && (HAL_GetTick() - startCarGreenTime >= redDelayMax)) { //R2.6
 
 					/* Initialize timing variables for car transition */
 					startCarOrangeTime = HAL_GetTick();
-				}
 
-				if(carHorizontal && carVertical && (HAL_GetTick() - startCarRedTime >= redDelayMax)) { //R2.6
-					/* If there are active cars in horizontal and vertical lane, it waits redDelayMax until vertical lane changes to green */
-					NextState = VerticalOrange;
+					/* If there are active cars in both lanes, horizontal lane shall wait redDelayMax ms */
+					NextState = VerticalOrangeToRed;
 
-					/* Initialize timing variables for car transition */
-					startCarOrangeTime = HAL_GetTick();
-				}
-
-				if (carHorizontal && !carVertical) { //R2.7
-					/* If there are active cars in horizontal lane but no active cars in vertical lane */
-					NextState = VerticalOrange;
+				} else if (carHorizontal && !carVertical) { //R2.7
 
 					/* Initialize timing variables for car transition */
 					startCarOrangeTime = HAL_GetTick();
-				}
 
-				else
-					NextState = VerticalGreen; // Stay in Default state
+					/* If there are no active cars in vertical lane but there are active cars in horizontal lane */
+					NextState = VerticalOrangeToRed;
+
+				} else //R2.5
+					/* if there are active cars in vertical lane but no cars in horizontal lane waiting. Signal remains green. */
+					NextState = VerticalGreen;
 				break;
 
-				case VerticalOrange:
+				case VerticalOrangeToRed:
+					car1_SetOrange();
+					car2_SetRed();
 
-					/* After orangeDelay, switch car signals from green to orange */
-					if (HAL_GetTick() - startCarOrangeTime >= orangeDelay) { //turn on orange light
-						set(leds, &TL1_Yellow);
-						set(leds, &TL3_Yellow);
-						reset(leds, &TL1_Green);
-						reset(leds, &TL3_Green);
+					/* Vertical lane stays orange for orangeDelay ms */
+					if (HAL_GetTick() - startCarOrangeTime >= orangeDelay) { //turn off orange light
 
+						/* Horizontal lane prepares to turn orange as vertical lane turns red */
 						startCarOrangeTime = HAL_GetTick();
-						NextState = HorizontalOrange;
+						NextState = HorizontalOrangeToGreen;
 					}
-
 					break;
 
-				case HorizontalOrange:
+				case HorizontalOrangeToGreen:
+					car1_SetRed();
+					car2_SetOrange();
 
-					if (HAL_GetTick() - startCarOrangeTime >= orangeDelay) { //turn on orange light
-						set(leds, &TL2_Yellow);
-						set(leds, &TL4_Yellow);
-						reset(leds, &TL2_Red);
-						reset(leds, &TL4_Red);
+					if (HAL_GetTick() - startCarOrangeTime >= orangeDelay) {
+
+						/* Horizontal lane prepares to turn green */
+						startCarGreenTime = HAL_GetTick();
+						NextState = HorizontalGreen;
 					}
-					/* Ensure cars remain red after pedestrian request
-					if (HAL_GetTick() - startCarRedTime1 >= pedestrianDelay) {
-						set(leds, &TL1_Red);
-						set(leds, &TL3_Red);
-						reset(leds, &TL1_Green);
-						reset(leds, &TL3_Green);
-
-						startCarOrangeTime1 = HAL_GetTick();
-						NextState1 = CarOrangeToGreen;
-					}*/
 					break;
 
 				case HorizontalGreen:
+					car2_SetGreen();	//SW2 & SW4 car signals shall be green
+					car1_SetRed();		//SW1 & SW3 car signals shall be red
 
+					if(!carHorizontal && !carVertical && (HAL_GetTick() - startCarGreenTime >= greenDelay)){
+
+						/* Initialize timing variables for car transition */
+						startCarOrangeTime = HAL_GetTick();
+
+						/* If there are no active cars in either lanes, signal shall be green for greenDelay ms */
+						NextState = HorizontalOrangeToRed;
+
+					} else if(carHorizontal && carVertical && (HAL_GetTick() - startCarGreenTime >= redDelayMax)) {
+
+						/* Initialize timing variables for car transition */
+						startCarOrangeTime = HAL_GetTick();
+
+						/* If there are active cars in both lanes, vertical lane shall wait redDelayMax ms */
+						NextState = HorizontalOrangeToRed;
+
+					} else if(!carHorizontal && carVertical) {
+
+						/* Initialize timing variables for car transition */
+						startCarOrangeTime = HAL_GetTick();
+
+						/* If there no cars in horizontal lane but active cars in vertical lane */
+						NextState = HorizontalOrangeToRed;
+
+					} else {
+
+						/* Active cars in horizontal lane but no cars in vertical lane */
+						NextState = HorizontalGreen;
+					}
+					break;
+
+				case HorizontalOrangeToRed:
+
+					car2_SetOrange();
 					car1_SetRed();
 
-				/*
-				// Car stays orange
-				reset(leds, &TL1_Red);
-				reset(leds, &TL3_Red);
-				set(leds, &TL1_Yellow);
-				set(leds, &TL3_Yellow);
-				reset(leds, &TL1_Green);
-				reset(leds, &TL3_Green);
+					if (HAL_GetTick() - startCarOrangeTime >= orangeDelay) { //turn on orange light
 
-				// After orangeDelay, switch to green
-				if (HAL_GetTick() - startCarOrangeTime1 >= orangeDelay) {
-					reset(leds, &TL1_Yellow);
-					reset(leds, &TL3_Yellow);
-					set(leds, &TL1_Green);
-					set(leds, &TL3_Green);
-					NextState1 = Default;
-				}*/
+						/* Vertical lane prepares to turn orange as vertical lane turns red */
+						startCarOrangeTime = HAL_GetTick();
+						NextState = VerticalOrangeToGreen;
+					}
+				break;
+
+				case VerticalOrangeToGreen:
+
+					car1_SetOrange();
+					car2_SetRed();
+
+					if (HAL_GetTick() - startCarOrangeTime >= orangeDelay) {
+
+						/* Horizontal lane prepares to turn green */
+						startCarGreenTime = HAL_GetTick();
+						NextState = VerticalGreen;
+					}
 				break;
 
 				default:
