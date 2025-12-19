@@ -1,11 +1,11 @@
 /*
- * statemachine.c
+ * statemachine_pedestrian.c
  *
  *  Created on: 9 Dec 2025
  *      Author: kaur_
  */
 /*
- * statemachine.c
+ * statemachine_pedestrian.c
  *
  *  Created on: 9 Dec 2025
  *      Author: kaur_
@@ -15,7 +15,6 @@
 #include "spi.h"
 #include "FreeRTOS.h"
 #include "gpio.h"
-#include "tasks.h"
 #include <stdbool.h>
 #include "leds.h"
 #include "functions.h"
@@ -37,7 +36,7 @@ typedef enum {
 	PedGreen			//pedestrian green light on
 } states;
 
-void PedestrianCrossing1(void)
+void PedestrianCrossing1()
 {
 
     static states State1 = Default;
@@ -157,7 +156,7 @@ void PedestrianCrossing1(void)
     }
   }
 
-void PedestrianCrossing2(void)
+void PedestrianCrossing2()
 {
 	 static states State2 = Default;
 	 static states NextState2 = Default;
